@@ -92,7 +92,7 @@ function IssueOrderDetail({ order, showToast, onClose, onUpdated }) {
   };
 
   return (
-    <Modal title={`Issue Order #${order.id}`} subtitle="Review approved demand details and prepare gate pass." onClose={onClose} width={960}>
+    <Modal title={`Issue Order - ${order.order_number}`} subtitle="Review approved demand details and prepare gate pass." onClose={onClose} width={960}>
       <div style={{ display: "grid", gap: 20 }}>
         <Card style={{ boxShadow: "none", background: "var(--color-primary-50)" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 14 }}>
