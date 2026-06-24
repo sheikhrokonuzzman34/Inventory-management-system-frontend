@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../api";
+import { useAuth } from "../context/AuthContext";
 import { Badge, Button, Modal, PageHeader, Spinner, EmptyState } from "../components/UI";
+import { ROLES } from "../utils/roles";
 
 export default function GatePassesPage({ showToast }) {
+  const { user } = useAuth();
   const [passes, setPasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -66,14 +69,14 @@ export default function GatePassesPage({ showToast }) {
 
       {selected && (
         <Modal title={`Gate Pass — ${selected.pass_number}`} onClose={() => setSelected(null)} width={560}>
-          <GatePassDetail gp={selected} showToast={showToast} onClose={() => { setSelected(null); load(); }} />
+          <GatePassDetail gp={selected} user={user} showToast={showToast} onClose={() => { setSelected(null); load(); }} />
         </Modal>
       )}
     </div>
   );
 }
 
-function GatePassDetail({ gp, showToast, onClose }) {
+function GatePassDetail({ gp, user, showToast, onClose }) {
   const [withdrawing, setWithdrawing] = useState(false);
   const demand = gp.issue_order?.demand;
 
@@ -129,7 +132,7 @@ function GatePassDetail({ gp, showToast, onClose }) {
         </tbody>
       </table>
 
-      {gp.status === "issued" ? (
+      {gp.status === "issued" && user?.role === ROLES.SC ? (
         <div>
           <div style={{ background: "#FFF3E0", color: "#E65100", padding: "10px 12px", borderRadius: 7,
             fontSize: 13, marginBottom: 12 }}>
@@ -138,6 +141,10 @@ function GatePassDetail({ gp, showToast, onClose }) {
           <Button onClick={handleWithdraw} disabled={withdrawing} variant="success">
             {withdrawing ? "Processing…" : "✓ Confirm Items Withdrawn"}
           </Button>
+        </div>
+      ) : gp.status === "issued" ? (
+        <div style={{ background: "#F1EFE8", color: "#5F5E5A", padding: "10px 12px", borderRadius: 7, fontSize: 13 }}>
+          Waiting for Store Controller to confirm item withdrawal.
         </div>
       ) : (
         <div style={{ background: "#EAF3DE", color: "#3B6D11", padding: "10px 12px", borderRadius: 7, fontSize: 13 }}>

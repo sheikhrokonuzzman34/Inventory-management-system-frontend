@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../api";
-import { Badge, Button, Card, PageHeader, Modal, Spinner, EmptyState } from "../components/UI";
-import { DEMAND_STATUS_COLORS, DEMAND_STATUS_LABELS } from "../utils/roles";
+import { useAuth } from "../context/AuthContext";
+import { Badge, Button, PageHeader, Modal, Spinner, EmptyState } from "../components/UI";
+import { DEMAND_STATUS_COLORS, DEMAND_STATUS_LABELS, ROLES } from "../utils/roles";
 
 export default function IssueOrdersPage({ showToast }) {
+  const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -66,14 +68,14 @@ export default function IssueOrdersPage({ showToast }) {
 
       {selected && (
         <Modal title={`Issue Order — ${selected.order_number}`} onClose={() => setSelected(null)} width={580}>
-          <IssueOrderDetail order={selected} showToast={showToast} onClose={() => { setSelected(null); load(); }} />
+          <IssueOrderDetail order={selected} user={user} showToast={showToast} onClose={() => { setSelected(null); load(); }} />
         </Modal>
       )}
     </div>
   );
 }
 
-function IssueOrderDetail({ order, showToast, onClose }) {
+function IssueOrderDetail({ order, user, showToast, onClose }) {
   const demand = order.demand;
   const [creating, setCreating] = useState(false);
   const [lineQtys, setLineQtys] = useState(() => {
@@ -84,6 +86,7 @@ function IssueOrderDetail({ order, showToast, onClose }) {
   const [notes, setNotes] = useState("");
 
   const hasGatePass = !!order.gate_pass;
+  const canIssueGatePass = user?.role === ROLES.SC && !hasGatePass;
 
   const handleCreateGatePass = async () => {
     setCreating(true);
@@ -112,7 +115,7 @@ function IssueOrderDetail({ order, showToast, onClose }) {
       </div>
 
       <div style={{ fontSize: 12, fontWeight: 500, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-        Items {!hasGatePass && "— Set Issue Quantities"}
+        Items {canIssueGatePass && "— Set Issue Quantities"}
       </div>
 
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginBottom: 16 }}>
@@ -130,8 +133,8 @@ function IssueOrderDetail({ order, showToast, onClose }) {
               <td style={{ padding: "8px 10px", borderBottom: "1px solid #f5f5f5" }}>{line.item?.name}</td>
               <td style={{ padding: "8px 10px", borderBottom: "1px solid #f5f5f5" }}>{line.qty_approved ?? line.qty_requested} {line.item?.unit}</td>
               <td style={{ padding: "8px 10px", borderBottom: "1px solid #f5f5f5" }}>
-                {hasGatePass ? (
-                  <span>{line.qty_issued ?? "—"} {line.item?.unit}</span>
+                {!canIssueGatePass ? (
+                  <span>{line.qty_issued ?? line.qty_approved ?? line.qty_requested} {line.item?.unit}</span>
                 ) : (
                   <input type="number" min={0} max={line.qty_approved ?? line.qty_requested}
                     value={lineQtys[line.id] ?? ""}
@@ -149,7 +152,7 @@ function IssueOrderDetail({ order, showToast, onClose }) {
           ✓ Gate Pass <strong>{order.gate_pass?.pass_number}</strong> has been issued.
           Status: {order.gate_pass?.status}
         </div>
-      ) : (
+      ) : canIssueGatePass ? (
         <div>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes for gate pass…" rows={2}
             style={{ width: "100%", padding: "8px", fontSize: 13, border: "1px solid #ddd", borderRadius: 6,
@@ -157,6 +160,10 @@ function IssueOrderDetail({ order, showToast, onClose }) {
           <Button onClick={handleCreateGatePass} disabled={creating}>
             {creating ? "Issuing…" : "Issue Gate Pass"}
           </Button>
+        </div>
+      ) : (
+        <div style={{ background: "#F1EFE8", color: "#5F5E5A", padding: "10px 12px", borderRadius: 7, fontSize: 13 }}>
+          Waiting for Store Controller to issue the gate pass.
         </div>
       )}
     </div>

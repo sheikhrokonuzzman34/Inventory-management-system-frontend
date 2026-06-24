@@ -140,8 +140,8 @@ function DemandDetail({ demand, onAction, user, showToast, onClose }) {
                 style={{ width: "100%", padding: "8px", fontSize: 13, border: "1px solid #ddd", borderRadius: 6,
                   outline: "none", resize: "none", marginBottom: 10, boxSizing: "border-box" }} />
               <div style={{ display: "flex", gap: 8 }}>
-                <Button onClick={() => act("approve")} disabled={acting}>{acting ? "…" : "✓ Approve"}</Button>
-                <Button variant="danger" onClick={() => act("reject")} disabled={acting}>{acting ? "…" : "✗ Reject"}</Button>
+                <Button onClick={() => act("approved")} disabled={acting}>{acting ? "…" : "✓ Approve"}</Button>
+                <Button variant="danger" onClick={() => act("rejected")} disabled={acting}>{acting ? "…" : "✗ Reject"}</Button>
               </div>
             </div>
           );
@@ -176,9 +176,10 @@ export default function DemandsPage({ showToast, setPage }) {
   const handleAction = async (demandId, action, remarks, qtyApproved) => {
     if (action === "forward") {
       await api.forwardDemand(demandId, user.id);
-    } else if (action === "approve" || action === "reject") {
-      const payload = { action, remarks };
-      if (action === "approve" && user.role === ROLES.L3) {
+    } else if (["approved", "rejected", "approve", "reject"].includes(action)) {
+      const normalizedAction = action === "approve" ? "approved" : action === "reject" ? "rejected" : action;
+      const payload = { action: normalizedAction, remarks };
+      if (normalizedAction === "approved" && user.role === ROLES.L3) {
         payload.qty_approved = Object.entries(qtyApproved).map(([line_id, qty]) => ({ line_id: Number(line_id), qty }));
       }
       await api.approveDemand(demandId, payload);
