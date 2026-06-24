@@ -1,12 +1,227 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Prison IMS</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory Management System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      /* Blue */
+      --color-primary-50: #eff0f6;
+      --color-primary-100: #ccd0e4;
+      --color-primary-200: #b4b9d7;
+      --color-primary-300: #9199c5;
+      --color-primary-400: #7c85b9;
+      --color-primary-500: #5b67a8;
+      --color-primary-600: #535e99;
+      --color-primary-700: #414977;
+      --color-primary-800: #32395c;
+      --color-primary-900: #262b47;
+
+      /* Blue V2*/
+      --color-secondary-50: #eeeef9;
+      --color-secondary-100: #c9cbeb;
+      --color-secondary-200: #afb1e1;
+      --color-secondary-300: #8a8ed3;
+      --color-secondary-400: #7478cb;
+      --color-secondary-500: #5156be;
+      --color-secondary-600: #4a4ead;
+      --color-secondary-700: #3a3d87;
+      --color-secondary-800: #2d2f69;
+      --color-secondary-900: #222450;
+
+      /* Black */
+      --color-black-50: #e6e6e9;
+      --color-black-100: #b1b0ba;
+      --color-black-200: #8b8a98;
+      --color-black-300: #565469;
+      --color-black-400: #35334c;
+      --color-black-500: #03001f;
+      --color-black-600: #03001c;
+      --color-black-700: #020016;
+      --color-black-800: #020011;
+      --color-black-900: #01000d;
+
+      /* Success */
+      --color-success-50: #e9f6f1;
+      --color-success-100: #bce3d3;
+      --color-success-200: #9bd6be;
+      --color-success-300: #6ec3a1;
+      --color-success-400: #51b78e;
+      --color-success-500: #26a572;
+      --color-success-600: #239668;
+      --color-success-700: #1b7551;
+      --color-success-800: #155b3f;
+      --color-success-900: #104530;
+
+      /* Danger */
+      --color-danger-50: #fdeeee;
+      --color-danger-100: #f7cccb;
+      --color-danger-200: #f4b3b1;
+      --color-danger-300: #ee908e;
+      --color-danger-400: #eb7a78;
+      --color-danger-500: #e65956;
+      --color-danger-600: #d1514e;
+      --color-danger-700: #a33f3d;
+      --color-danger-800: #7f312f;
+      --color-danger-900: #612524;
+
+      /* Info */
+      --color-info-50: #ecf5fb;
+      --color-info-100: #c5dff3;
+      --color-info-200: #a9cfee;
+      --color-info-300: #82b9e6;
+      --color-info-400: #69ace1;
+      --color-info-500: #4497d9;
+      --color-info-600: #3e89c5;
+      --color-info-700: #306b9a;
+      --color-info-800: #255377;
+      --color-info-900: #1d3f5b;
+
+      /* Warn */
+      --color-warn-50: #fef6e9;
+      --color-warn-100: #fce3bb;
+      --color-warn-200: #fad59a;
+      --color-warn-300: #f8c272;
+      --color-warn-400: #f7b656;
+      --color-warn-500: #f5a42b;
+      --color-warn-600: #df9527;
+      --color-warn-700: #ae751e;
+      --color-warn-800: #875b17;
+      --color-warn-900: #674610;
+
+      /* App aliases using the provided palette */
+      --surface: #ffffff;
+      --surface-soft: var(--color-primary-50);
+      --surface-muted: var(--color-secondary-50);
+      --layout-bg: var(--color-primary-50);
+      --sidebar-bg: var(--color-black-500);
+      --sidebar-bg-deep: var(--color-black-700);
+      --text-primary: var(--color-black-500);
+      --text-secondary: var(--color-black-300);
+      --text-muted: var(--color-black-200);
+      --border: var(--color-primary-100);
+      --border-soft: var(--color-primary-50);
+      --brand: var(--color-primary-500);
+      --brand-hover: var(--color-primary-600);
+      --brand-deep: var(--color-primary-900);
+      --accent: var(--color-secondary-500);
+      --success: var(--color-success-500);
+      --danger: var(--color-danger-500);
+      --info: var(--color-info-500);
+      --warn: var(--color-warn-500);
+      --radius-xs: 8px;
+      --radius-sm: 12px;
+      --radius: 16px;
+      --radius-lg: 24px;
+      --shadow-sm: 0 8px 22px rgba(3, 0, 31, 0.06);
+      --shadow: 0 18px 50px rgba(3, 0, 31, 0.10);
+      --shadow-lg: 0 32px 90px rgba(3, 0, 31, 0.18);
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+      --transition: 0.18s ease;
+    }
+
+    html,
+    body,
+    #root {
+      min-height: 100%;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--layout-bg);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection {
+      background: var(--color-primary-200);
+      color: var(--color-black-500);
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--color-primary-200);
+      border-radius: 999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--color-primary-300);
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      font-family: var(--font-body);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .page-enter {
+      animation: fadeIn 0.25s ease forwards;
+      padding: 30px;
+    }
+
+    @media (max-width: 760px) {
+      .page-enter {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
 </html>

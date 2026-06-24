@@ -1,92 +1,77 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../api";
-import { useAuth } from "../context/AuthContext";
-import { Badge, Button, PageHeader, Modal, Spinner, EmptyState } from "../components/UI";
-import { DEMAND_STATUS_COLORS, DEMAND_STATUS_LABELS, ROLES } from "../utils/roles";
+import { Badge, Button, Card, EmptyState, Modal, PageHeader, SectionTitle, Spinner, Table, TableRow, TD, Textarea } from "../components/UI";
+import { CAT_COLORS, DEMAND_STATUS_COLORS, DEMAND_STATUS_LABELS } from "../utils/roles";
 
 export default function IssueOrdersPage({ showToast }) {
-  const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
 
   const load = () => {
     setLoading(true);
-    api.getIssueOrders().then(setOrders).finally(() => setLoading(false));
+    api.getIssueOrders().then(setOrders).catch((e) => showToast(e.message, "err")).finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
-
-  if (loading) return <Spinner />;
+  useEffect(() => {
+    load();
+  }, []);
 
   return (
     <div>
-      <PageHeader title="Issue Orders" subtitle="View all created issue orders" />
+      <PageHeader
+        icon="solar:document-add-broken"
+        title="Issue Orders"
+        subtitle="Create gate passes from approved issue orders and track dispatch readiness."
+      />
 
-      {orders.length === 0 ? <EmptyState message="No issue orders yet." /> : (
-        <div style={{ border: "1px solid #eee", borderRadius: 10, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: "#fafafa" }}>
-                {["Order #", "Demand Form", "Department", "Requester", "Created By", "Date", "Status", ""].map((h) => (
-                  <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 11, color: "#888",
-                    borderBottom: "1px solid #eee", textTransform: "uppercase", letterSpacing: "0.03em" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((o) => {
-                const dstatus = o.demand?.status;
-                const sc = DEMAND_STATUS_COLORS[dstatus] || {};
-                return (
-                  <tr key={o.id} style={{ background: "#fff" }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "#fafafa"}
-                    onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5", fontWeight: 500 }}>{o.order_number}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5" }}>{o.demand?.form_number}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5" }}>{o.demand?.department}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5" }}>{o.demand?.requester?.full_name}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5" }}>{o.created_by_user?.full_name}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5", color: "#aaa", fontSize: 12 }}>
-                      {new Date(o.created_at).toLocaleDateString()}
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5" }}>
-                      <Badge label={DEMAND_STATUS_LABELS[dstatus]} bg={sc.bg} color={sc.color} />
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5" }}>
-                      <button onClick={() => setSelected(o)}
-                        style={{ fontSize: 12, padding: "3px 10px", border: "1px solid #ddd",
-                          borderRadius: 5, background: "transparent", cursor: "pointer" }}>View</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {loading ? (
+        <Spinner label="Loading issue orders..." />
+      ) : orders.length === 0 ? (
+        <EmptyState message="No issue orders found" sub="Fully approved demands will appear here once an issue order is created." icon="solar:document-add-broken" />
+      ) : (
+        <Table headers={["Issue Order", "Demand", "Department", "Status", "Gate Pass", "Created"]}>
+          {orders.map((order) => {
+            const status = order.demand?.status;
+            const sc = DEMAND_STATUS_COLORS[status] || {};
+            return (
+              <TableRow key={order.id} onClick={() => setSelected(order)}>
+                <TD style={{ fontWeight: 900 }}>#{order.id}</TD>
+                <TD>#{order.demand?.id || "—"}</TD>
+                <TD>{order.demand?.department || "—"}</TD>
+                <TD><Badge label={DEMAND_STATUS_LABELS[status] || status || "—"} bg={sc.bg} color={sc.color} /></TD>
+                <TD>
+                  {order.gate_pass ? (
+                    <Badge label={`Gate Pass #${order.gate_pass.id}`} bg="var(--color-success-50)" color="var(--color-success-700)" />
+                  ) : (
+                    <Badge label="Not Created" bg="var(--color-warn-50)" color="var(--color-warn-800)" />
+                  )}
+                </TD>
+                <TD style={{ color: "var(--text-muted)" }}>{formatDate(order.created_at)}</TD>
+              </TableRow>
+            );
+          })}
+        </Table>
       )}
 
-      {selected && (
-        <Modal title={`Issue Order — ${selected.order_number}`} onClose={() => setSelected(null)} width={580}>
-          <IssueOrderDetail order={selected} user={user} showToast={showToast} onClose={() => { setSelected(null); load(); }} />
-        </Modal>
-      )}
+      {selected && <IssueOrderDetail order={selected} showToast={showToast} onClose={() => setSelected(null)} onUpdated={load} />}
     </div>
   );
 }
 
-function IssueOrderDetail({ order, user, showToast, onClose }) {
+function IssueOrderDetail({ order, showToast, onClose, onUpdated }) {
   const demand = order.demand;
   const [creating, setCreating] = useState(false);
+  const [notes, setNotes] = useState("");
   const [lineQtys, setLineQtys] = useState(() => {
     const init = {};
-    demand?.lines?.forEach((l) => { init[l.id] = l.qty_approved ?? l.qty_requested; });
+    demand?.lines?.forEach((line) => {
+      init[line.id] = line.qty_approved ?? line.qty_requested;
+    });
     return init;
   });
-  const [notes, setNotes] = useState("");
 
   const hasGatePass = !!order.gate_pass;
-  const canIssueGatePass = user?.role === ROLES.SC && !hasGatePass;
 
   const handleCreateGatePass = async () => {
     setCreating(true);
@@ -94,78 +79,105 @@ function IssueOrderDetail({ order, user, showToast, onClose }) {
       await api.createGatePass({
         issue_order_id: order.id,
         notes,
-        line_quantities: Object.entries(lineQtys).map(([line_id, qty_issued]) => ({
-          line_id: Number(line_id), qty_issued: Number(qty_issued),
-        })),
+        line_quantities: Object.entries(lineQtys).map(([line_id, qty]) => ({ line_id: Number(line_id), qty_issued: Number(qty) })),
       });
-      showToast("Gate pass issued. All parties notified.");
+      showToast("Gate pass created successfully.");
+      onUpdated?.();
       onClose();
-    } catch (e) { showToast(e.message, "err"); }
-    finally { setCreating(false); }
+    } catch (e) {
+      showToast(e.message, "err");
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
-    <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, marginBottom: 16 }}>
-        <div><span style={{ color: "#888" }}>Order #:</span> <strong>{order.order_number}</strong></div>
-        <div><span style={{ color: "#888" }}>Demand:</span> {demand?.form_number}</div>
-        <div><span style={{ color: "#888" }}>Requester:</span> {demand?.requester?.full_name}</div>
-        <div><span style={{ color: "#888" }}>Department:</span> {demand?.department}</div>
-        {order.notes && <div style={{ gridColumn: "1/-1" }}><span style={{ color: "#888" }}>Notes:</span> {order.notes}</div>}
-      </div>
+    <Modal title={`Issue Order #${order.id}`} subtitle="Review approved demand details and prepare gate pass." onClose={onClose} width={960}>
+      <div style={{ display: "grid", gap: 20 }}>
+        <Card style={{ boxShadow: "none", background: "var(--color-primary-50)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 14 }}>
+            <Info label="Demand" value={`#${demand?.id || "—"}`} />
+            <Info label="Department" value={demand?.department || "—"} />
+            <Info label="Requester" value={demand?.requester?.full_name || demand?.requester?.username || "—"} />
+            <Info label="Created" value={formatDate(order.created_at)} />
+          </div>
+        </Card>
 
-      <div style={{ fontSize: 12, fontWeight: 500, color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-        Items {canIssueGatePass && "— Set Issue Quantities"}
-      </div>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginBottom: 16 }}>
-        <thead>
-          <tr style={{ background: "#fafafa" }}>
-            {["Item", "Approved", "To Issue"].map((h) => (
-              <th key={h} style={{ padding: "7px 10px", textAlign: "left", fontSize: 11, color: "#888",
-                borderBottom: "1px solid #eee", textTransform: "uppercase" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {demand?.lines?.map((line) => (
-            <tr key={line.id}>
-              <td style={{ padding: "8px 10px", borderBottom: "1px solid #f5f5f5" }}>{line.item?.name}</td>
-              <td style={{ padding: "8px 10px", borderBottom: "1px solid #f5f5f5" }}>{line.qty_approved ?? line.qty_requested} {line.item?.unit}</td>
-              <td style={{ padding: "8px 10px", borderBottom: "1px solid #f5f5f5" }}>
-                {!canIssueGatePass ? (
-                  <span>{line.qty_issued ?? line.qty_approved ?? line.qty_requested} {line.item?.unit}</span>
-                ) : (
-                  <input type="number" min={0} max={line.qty_approved ?? line.qty_requested}
-                    value={lineQtys[line.id] ?? ""}
-                    onChange={(e) => setLineQtys((q) => ({ ...q, [line.id]: e.target.value }))}
-                    style={{ width: 72, padding: "4px 6px", fontSize: 12, border: "1px solid #ddd", borderRadius: 4 }} />
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {hasGatePass ? (
-        <div style={{ background: "#EAF3DE", color: "#3B6D11", padding: "10px 12px", borderRadius: 7, fontSize: 13 }}>
-          ✓ Gate Pass <strong>{order.gate_pass?.pass_number}</strong> has been issued.
-          Status: {order.gate_pass?.status}
-        </div>
-      ) : canIssueGatePass ? (
         <div>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes for gate pass…" rows={2}
-            style={{ width: "100%", padding: "8px", fontSize: 13, border: "1px solid #ddd", borderRadius: 6,
-              outline: "none", resize: "none", marginBottom: 10, boxSizing: "border-box" }} />
-          <Button onClick={handleCreateGatePass} disabled={creating}>
-            {creating ? "Issuing…" : "Issue Gate Pass"}
-          </Button>
+          <SectionTitle icon="solar:box-broken">Issue Items</SectionTitle>
+          <Table headers={["Item", "Category", "Approved Qty", "Gate Pass Qty"]}>
+            {(demand?.lines || []).map((line) => {
+              const cc = CAT_COLORS[line.item?.category] || CAT_COLORS.Administrative;
+              return (
+                <TableRow key={line.id}>
+                  <TD style={{ fontWeight: 900 }}>{line.item?.name || "—"}</TD>
+                  <TD><Badge label={line.item?.category || "General"} bg={cc.bg} color={cc.color} /></TD>
+                  <TD>{line.qty_approved ?? line.qty_requested} {line.item?.unit}</TD>
+                  <TD>
+                    {hasGatePass ? (
+                      `${line.qty_issued ?? line.qty_approved ?? line.qty_requested} ${line.item?.unit || ""}`
+                    ) : (
+                      <input
+                        type="number"
+                        min="0"
+                        max={line.qty_approved ?? line.qty_requested}
+                        value={lineQtys[line.id] ?? line.qty_approved ?? line.qty_requested}
+                        onChange={(e) => setLineQtys((prev) => ({ ...prev, [line.id]: e.target.value }))}
+                        style={{
+                          width: 110,
+                          height: 36,
+                          borderRadius: 10,
+                          border: "1.5px solid var(--color-primary-100)",
+                          padding: "0 10px",
+                          outline: "none",
+                          fontWeight: 800,
+                        }}
+                      />
+                    )}
+                  </TD>
+                </TableRow>
+              );
+            })}
+          </Table>
         </div>
-      ) : (
-        <div style={{ background: "#F1EFE8", color: "#5F5E5A", padding: "10px 12px", borderRadius: 7, fontSize: 13 }}>
-          Waiting for Store Controller to issue the gate pass.
-        </div>
-      )}
+
+        {hasGatePass ? (
+          <Card style={{ boxShadow: "none", background: "var(--color-success-50)" }}>
+            <SectionTitle icon="solar:ticket-sale-broken">Gate Pass Already Created</SectionTitle>
+            <p style={{ margin: 0, color: "var(--color-success-800)", fontWeight: 700 }}>
+              Gate Pass #{order.gate_pass.id} has already been created for this issue order.
+            </p>
+          </Card>
+        ) : (
+          <Card style={{ boxShadow: "none", background: "var(--color-secondary-50)" }}>
+            <SectionTitle icon="solar:ticket-sale-broken">Create Gate Pass</SectionTitle>
+            <Textarea label="Notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add gate pass notes if needed..." />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+              <Button icon="solar:ticket-sale-broken" onClick={handleCreateGatePass} disabled={creating}>
+                {creating ? "Creating..." : "Create Gate Pass"}
+              </Button>
+            </div>
+          </Card>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function Info({ label, value }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11.5, color: "var(--text-muted)", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
+      <div style={{ marginTop: 5, fontWeight: 900 }}>{value}</div>
     </div>
   );
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  } catch {
+    return value;
+  }
 }

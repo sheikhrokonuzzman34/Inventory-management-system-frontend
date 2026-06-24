@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Layout from "./components/Layout";
 import LoginPage from "./pages/LoginPage";
@@ -9,7 +9,7 @@ import IssueOrdersPage from "./pages/IssueOrdersPage";
 import GatePassesPage from "./pages/GatePassesPage";
 import InventoryPage from "./pages/InventoryPage";
 import UsersPage from "./pages/UsersPage";
-import { Toast } from "./components/UI";
+import { Spinner, Toast } from "./components/UI";
 
 function AppInner() {
   const { user, loading } = useAuth();
@@ -23,9 +23,15 @@ function AppInner() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: "system-ui", color: "#aaa" }}>
-        Loading…
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "var(--layout-bg)",
+        }}
+      >
+        <Spinner label="Preparing inventory workspace..." />
       </div>
     );
   }
@@ -33,20 +39,20 @@ function AppInner() {
   if (!user) return <LoginPage />;
 
   const pages = {
-    dashboard:    <DashboardPage setPage={setPage} />,
+    dashboard: <DashboardPage setPage={setPage} />,
     "new-demand": <NewDemandPage setPage={setPage} showToast={showToast} />,
-    demands:      <DemandsPage setPage={setPage} showToast={showToast} />,
-    approvals:    <DemandsPage setPage={setPage} showToast={showToast} />,
+    demands: <DemandsPage setPage={setPage} showToast={showToast} />,
+    approvals: <DemandsPage setPage={setPage} showToast={showToast} />,
     "issue-orders": <IssueOrdersPage showToast={showToast} />,
-    "gate-passes":  <GatePassesPage showToast={showToast} />,
-    inventory:    <InventoryPage showToast={showToast} />,
-    users:        <UsersPage showToast={showToast} />,
-    audit:        <InventoryPage showToast={showToast} />,
+    "gate-passes": <GatePassesPage showToast={showToast} />,
+    inventory: <InventoryPage showToast={showToast} />,
+    users: <UsersPage showToast={showToast} />,
+    audit: <InventoryPage showToast={showToast} auditOnly />,
   };
 
   return (
     <Layout currentPage={page} setPage={setPage}>
-      {pages[page] || pages["dashboard"]}
+      {pages[page] || pages.dashboard}
       <Toast toast={toast} />
     </Layout>
   );

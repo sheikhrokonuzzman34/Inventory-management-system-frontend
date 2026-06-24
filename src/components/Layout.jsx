@@ -1,24 +1,68 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { Icon } from "@iconify/react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api";
+import { Button } from "./UI";
 import { ROLE_LABELS, ROLES } from "../utils/roles";
-import { Badge } from "./UI";
 
 const NAV_BY_ROLE = {
-  [ROLES.ADMIN]:  [{ label: "Dashboard", page: "dashboard" }, { label: "Inventory", page: "inventory" }, { label: "Users", page: "users" }, { label: "Demands", page: "demands" }, { label: "Audit Log", page: "audit" }],
-  [ROLES.USER]:   [{ label: "Dashboard", page: "dashboard" }, { label: "My Demands", page: "demands" }, { label: "New Demand", page: "new-demand" }],
-  [ROLES.DC]:     [{ label: "Dashboard", page: "dashboard" }, { label: "Demands", page: "demands" }, { label: "Issue Orders", page: "issue-orders" }],
-  [ROLES.L1]:     [{ label: "Dashboard", page: "dashboard" }, { label: "Approvals", page: "approvals" }],
-  [ROLES.L2]:     [{ label: "Dashboard", page: "dashboard" }, { label: "Approvals", page: "approvals" }],
-  [ROLES.L3]:     [{ label: "Dashboard", page: "dashboard" }, { label: "Approvals", page: "approvals" }],
-  [ROLES.SC]:     [{ label: "Dashboard", page: "dashboard" }, { label: "Inventory", page: "inventory" }, { label: "Issue Orders", page: "issue-orders" }, { label: "Gate Passes", page: "gate-passes" }],
+  [ROLES.ADMIN]: [
+    { key: "dashboard", label: "Dashboard", icon: "solar:widget-5-broken" },
+    { key: "inventory", label: "Inventory", icon: "solar:box-broken" },
+    { key: "users", label: "Users", icon: "solar:users-group-rounded-broken" },
+    { key: "demands", label: "Demands", icon: "solar:clipboard-list-broken" },
+    { key: "audit", label: "Audit Log", icon: "solar:history-broken" },
+  ],
+  [ROLES.USER]: [
+    { key: "dashboard", label: "Dashboard", icon: "solar:widget-5-broken" },
+    { key: "demands", label: "My Demands", icon: "solar:clipboard-list-broken" },
+    { key: "new-demand", label: "New Demand", icon: "solar:add-square-broken" },
+  ],
+  [ROLES.DC]: [
+    { key: "dashboard", label: "Dashboard", icon: "solar:widget-5-broken" },
+    { key: "demands", label: "Demands", icon: "solar:clipboard-list-broken" },
+    { key: "issue-orders", label: "Issue Orders", icon: "solar:document-add-broken" },
+  ],
+  [ROLES.L1]: [
+    { key: "dashboard", label: "Dashboard", icon: "solar:widget-5-broken" },
+    { key: "approvals", label: "Approvals", icon: "solar:checklist-minimalistic-broken" },
+  ],
+  [ROLES.L2]: [
+    { key: "dashboard", label: "Dashboard", icon: "solar:widget-5-broken" },
+    { key: "approvals", label: "Approvals", icon: "solar:checklist-minimalistic-broken" },
+  ],
+  [ROLES.L3]: [
+    { key: "dashboard", label: "Dashboard", icon: "solar:widget-5-broken" },
+    { key: "approvals", label: "Approvals", icon: "solar:checklist-minimalistic-broken" },
+  ],
+  [ROLES.SC]: [
+    { key: "dashboard", label: "Dashboard", icon: "solar:widget-5-broken" },
+    { key: "inventory", label: "Inventory", icon: "solar:box-broken" },
+    { key: "issue-orders", label: "Issue Orders", icon: "solar:document-add-broken" },
+    { key: "gate-passes", label: "Gate Passes", icon: "solar:ticket-sale-broken" },
+  ],
 };
 
-export default function Layout({ currentPage, setPage, children }) {
+const pageTitles = {
+  dashboard: "Dashboard",
+  "new-demand": "New Demand",
+  demands: "Demand Forms",
+  approvals: "Approvals",
+  "issue-orders": "Issue Orders",
+  "gate-passes": "Gate Passes",
+  inventory: "Inventory",
+  users: "Users",
+  audit: "Audit Log",
+};
+
+export default function Layout({ children, currentPage, setPage }) {
   const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [showNotif, setShowNotif] = useState(false);
   const notifRef = useRef(null);
+
+  const navItems = NAV_BY_ROLE[user?.role] || NAV_BY_ROLE[ROLES.USER];
+  const unread = notifications.filter((n) => !n.is_read).length;
 
   const fetchNotifications = () => {
     api.getNotifications().then(setNotifications).catch(() => {});
@@ -38,93 +82,276 @@ export default function Layout({ currentPage, setPage, children }) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const unread = notifications.filter((n) => !n.is_read).length;
-  const navItems = NAV_BY_ROLE[user?.role] || [];
-
   const markAllRead = () => {
-    api.markAllRead().then(fetchNotifications);
+    api.markAllRead().then(fetchNotifications).catch(() => {});
     setShowNotif(false);
   };
 
+  const markRead = (id) => {
+    api.markRead(id).then(fetchNotifications).catch(() => {});
+  };
+
   return (
-    <div style={{ display: "flex", minHeight: "100vh", fontFamily: "system-ui, sans-serif" }}>
-      {/* Sidebar */}
-      <div style={{ width: 220, background: "#1a1a1a", color: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
-        <div style={{ padding: "20px 16px 14px", borderBottom: "1px solid #2e2e2e" }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>🏛️ Prison IMS</div>
-          <div style={{ fontSize: 11, color: "#888", marginTop: 3 }}>Inventory Management</div>
-        </div>
-        <nav style={{ flex: 1, padding: "8px 0" }}>
-          {navItems.map((item) => (
-            <button key={item.page} onClick={() => setPage(item.page)}
-              style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 16px",
-                background: currentPage === item.page ? "#2e2e2e" : "transparent",
-                color: currentPage === item.page ? "#fff" : "#aaa",
-                border: "none", cursor: "pointer", fontSize: 14,
-                borderLeft: currentPage === item.page ? "2px solid #fff" : "2px solid transparent" }}>
-              {item.label}
-            </button>
-          ))}
-        </nav>
-        <div style={{ padding: "12px 16px", borderTop: "1px solid #2e2e2e" }}>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 2 }}>{user?.full_name}</div>
-          <div style={{ fontSize: 11, color: "#555", marginBottom: 10 }}>{ROLE_LABELS[user?.role]}</div>
-          <button onClick={logout} style={{ fontSize: 12, color: "#888", background: "none", border: "1px solid #333",
-            borderRadius: 5, padding: "4px 10px", cursor: "pointer", width: "100%" }}>
-            Sign out
-          </button>
-        </div>
-      </div>
-
-      {/* Main */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Topbar */}
-        <div style={{ height: 52, background: "#fff", borderBottom: "1px solid #eee", display: "flex",
-          alignItems: "center", justifyContent: "flex-end", padding: "0 24px", gap: 12, flexShrink: 0 }}>
-          <div ref={notifRef} style={{ position: "relative" }}>
-            <button onClick={() => setShowNotif((v) => !v)}
-              style={{ background: "none", border: "1px solid #eee", borderRadius: 6, padding: "5px 10px",
-                cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-              🔔 {unread > 0 && <span style={{ background: "#A32D2D", color: "#fff", borderRadius: 10,
-                fontSize: 10, padding: "1px 5px", fontWeight: 700 }}>{unread}</span>}
-            </button>
-            {showNotif && (
-              <div style={{ position: "absolute", right: 0, top: "110%", width: 340, background: "#fff",
-                border: "1px solid #eee", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                zIndex: 300, maxHeight: 420, overflowY: "auto" }}>
-                <div style={{ padding: "12px 14px", borderBottom: "1px solid #eee", display: "flex",
-                  justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>Notifications</span>
-                  {unread > 0 && <button onClick={markAllRead}
-                    style={{ fontSize: 11, background: "none", border: "none", cursor: "pointer", color: "#185FA5" }}>
-                    Mark all read
-                  </button>}
-                </div>
-                {notifications.length === 0 && (
-                  <div style={{ padding: 20, textAlign: "center", color: "#aaa", fontSize: 13 }}>No notifications</div>
-                )}
-                {notifications.map((n) => (
-                  <div key={n.id} onClick={() => { api.markRead(n.id).then(fetchNotifications); }}
-                    style={{ padding: "10px 14px", borderBottom: "1px solid #f5f5f5", cursor: "pointer",
-                      background: n.is_read ? "#fff" : "#f8f9ff" }}>
-                    <div style={{ fontSize: 13, fontWeight: n.is_read ? 400 : 600, color: "#1a1a1a" }}>{n.title}</div>
-                    <div style={{ fontSize: 12, color: "#666", marginTop: 2, lineHeight: 1.4 }}>{n.message}</div>
-                    <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>
-                      {new Date(n.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        gridTemplateColumns: "280px 1fr",
+        background: "var(--layout-bg)",
+      }}
+    >
+      <aside
+        style={{
+          background:
+            "linear-gradient(180deg, var(--color-black-500) 0%, var(--color-black-700) 100%)",
+          color: "#ffffff",
+          padding: 20,
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          gap: 20,
+          boxShadow: "18px 0 50px rgba(3, 0, 31, 0.18)",
+        }}
+      >
+        <div style={{ display: "flex", gap: 12, alignItems: "center", padding: "8px 6px 18px" }}>
+          <div
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: 16,
+              display: "grid",
+              placeItems: "center",
+              background: "var(--color-primary-500)",
+              boxShadow: "0 16px 34px rgba(91, 103, 168, 0.34)",
+            }}
+          >
+            <Icon icon="solar:box-minimalistic-broken" width="26" height="26" />
           </div>
-          <span style={{ fontSize: 13, color: "#888" }}>{user?.department}</span>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.12 }}>Inventory</div>
+            <div style={{ fontSize: 12, color: "var(--color-primary-100)", marginTop: 3 }}>Management System</div>
+          </div>
         </div>
 
-        {/* Page content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "28px 28px" }}>
-          {children}
+        <nav style={{ display: "grid", gap: 6, flex: 1 }}>
+          {navItems.map((item) => {
+            const active = item.key === currentPage;
+            return (
+              <button
+                key={item.key}
+                onClick={() => setPage(item.key)}
+                style={{
+                  height: 44,
+                  width: "100%",
+                  border: active ? "1px solid var(--color-primary-700)" : "1px solid transparent",
+                  borderRadius: 8,
+                  background: active ? "rgba(91, 103, 168, 0.24)" : "transparent",
+                  color: active ? "#ffffff" : "var(--color-black-100)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 11,
+                  padding: "0 13px",
+                  cursor: "pointer",
+                  fontWeight: active ? 800 : 650,
+                  textAlign: "left",
+                  transition: "var(--transition)",
+                }}
+                onMouseEnter={(e) => {
+                  if (!active) e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) e.currentTarget.style.background = "transparent";
+                }}
+              >
+                <Icon icon={item.icon} width="20" height="20" />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div
+          style={{
+            padding: 14,
+            borderRadius: 8,
+            background: "rgba(255, 255, 255, 0.06)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+          }}
+        >
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 13,
+                display: "grid",
+                placeItems: "center",
+                background: "var(--color-secondary-500)",
+                fontWeight: 800,
+              }}
+            >
+              {(user?.full_name || user?.username || "U").slice(0, 1).toUpperCase()}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {user?.full_name || user?.username || "User"}
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--color-primary-100)", marginTop: 2 }}>
+                {ROLE_LABELS[user?.role] || user?.role || "Authorized User"}
+              </div>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon="solar:logout-2-broken"
+            onClick={logout}
+            style={{ width: "100%", background: "#ffffff" }}
+          >
+            Logout
+          </Button>
         </div>
-      </div>
+      </aside>
+
+      <main style={{ minWidth: 0 }}>
+        <header
+          style={{
+            height: 76,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 30px",
+            background: "rgba(255,255,255,0.82)",
+            backdropFilter: "blur(16px)",
+            borderBottom: "1px solid var(--border-soft)",
+            position: "sticky",
+            top: 0,
+            zIndex: 20,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 800 }}>IMS CONTROL PANEL</div>
+            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.03em" }}>
+              {pageTitles[currentPage] || "Dashboard"}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div ref={notifRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setShowNotif((v) => !v)}
+                style={{
+                  height: 40,
+                  minWidth: 44,
+                  borderRadius: 999,
+                  border: "1px solid var(--color-primary-100)",
+                  background: "var(--surface)",
+                  color: "var(--color-primary-700)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                  fontWeight: 800,
+                }}
+              >
+                <Icon icon="solar:bell-broken" width="20" height="20" />
+                {unread > 0 && (
+                  <span style={{ background: "var(--color-danger-500)", color: "#fff", borderRadius: 999, fontSize: 11, padding: "1px 7px" }}>
+                    {unread}
+                  </span>
+                )}
+              </button>
+
+              {showNotif && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "calc(100% + 10px)",
+                    width: 370,
+                    maxHeight: 430,
+                    overflowY: "auto",
+                    background: "var(--surface)",
+                    border: "1px solid var(--color-primary-100)",
+                    borderRadius: 18,
+                    boxShadow: "var(--shadow-lg)",
+                    zIndex: 200,
+                  }}
+                >
+                  <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border-soft)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <strong>Notifications</strong>
+                    {unread > 0 && (
+                      <button onClick={markAllRead} style={{ border: 0, background: "transparent", color: "var(--color-primary-600)", cursor: "pointer", fontWeight: 800, fontSize: 12 }}>
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)", fontWeight: 700 }}>No notifications</div>
+                  ) : (
+                    notifications.map((n) => (
+                      <button
+                        key={n.id}
+                        onClick={() => markRead(n.id)}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "12px 16px",
+                          border: 0,
+                          borderBottom: "1px solid var(--border-soft)",
+                          background: n.is_read ? "#fff" : "var(--color-info-50)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ fontWeight: n.is_read ? 700 : 900, color: "var(--text-primary)", fontSize: 13.5 }}>{n.title}</div>
+                        <div style={{ color: "var(--text-secondary)", fontSize: 12.5, marginTop: 4, lineHeight: 1.45 }}>{n.message}</div>
+                        <div style={{ color: "var(--text-muted)", fontSize: 11.5, marginTop: 5 }}>{formatDateTime(n.created_at)}</div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "8px 12px",
+                borderRadius: 999,
+                background: "var(--color-primary-50)",
+                color: "var(--color-primary-700)",
+                fontWeight: 800,
+                fontSize: 12.5,
+              }}
+            >
+              <Icon icon="solar:shield-check-broken" width="18" height="18" />
+              Secure Inventory Access
+            </div>
+          </div>
+        </header>
+        <section className="page-enter">{children}</section>
+      </main>
     </div>
   );
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return value;
+  }
 }

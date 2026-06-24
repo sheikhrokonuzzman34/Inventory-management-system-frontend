@@ -1,224 +1,710 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Icon } from "@iconify/react";
 import { api } from "../api";
-import { Badge, Button, Modal, Card, PageHeader, Spinner, EmptyState } from "../components/UI";
-import { getItemStatus, ITEM_STATUS_COLORS, ITEM_STATUS_LABELS, CAT_COLORS } from "../utils/roles";
 import { useAuth } from "../context/AuthContext";
-import { ROLES } from "../utils/roles";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  Modal,
+  PageHeader,
+  SectionTitle,
+  Select,
+  Spinner,
+  StatCard,
+  Table,
+  TableRow,
+  TD,
+  Textarea,
+} from "../components/UI";
+import {
+  CATEGORY_OPTIONS,
+  CAT_COLORS,
+  getItemStatus,
+  ITEM_STATUS_COLORS,
+  ITEM_STATUS_LABELS,
+  ROLES,
+} from "../utils/roles";
 
-const inp = { padding: "8px 10px", fontSize: 14, border: "1px solid #ddd", borderRadius: 6,
-  outline: "none", boxSizing: "border-box" };
-const lbl = { fontSize: 12, color: "#666", display: "block", marginBottom: 4 };
-
-const CATS = ["Medical", "Food", "Clothing", "Maintenance", "Security", "Administrative"];
-
-function ItemModal({ item, categories, onSave, onClose }) {
-  const [form, setForm] = useState({ name: "", category: "Medical", quantity: 0, min_stock: 10, unit: "unit", supplier: "", notes: "" });
-  const [saving, setSaving] = useState(false);
-  const set = (f) => (e) => setForm((p) => ({ ...p, [f]: e.target.value }));
-  useEffect(() => { if (item) setForm({ name: item.name, category: item.category, quantity: item.quantity, min_stock: item.min_stock, unit: item.unit || "unit", supplier: item.supplier || "", notes: item.notes || "" }); }, [item]);
-  const save = async () => {
-    setSaving(true);
-    try { await onSave({ ...form, quantity: Number(form.quantity), min_stock: Number(form.min_stock) }); onClose(); }
-    finally { setSaving(false); }
-  };
-  return (
-    <Modal title={item ? "Edit Item" : "Add Item"} onClose={onClose}>
-      <div style={{ display: "grid", gap: 14 }}>
-        <div><label style={lbl}>Name *</label><input style={{ ...inp, width: "100%" }} value={form.name} onChange={set("name")} /></div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div><label style={lbl}>Category</label>
-            <select style={{ ...inp, width: "100%" }} value={form.category} onChange={set("category")}>
-              {CATS.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          <div><label style={lbl}>Unit</label><input style={{ ...inp, width: "100%" }} value={form.unit} onChange={set("unit")} /></div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div><label style={lbl}>Quantity</label><input style={{ ...inp, width: "100%" }} type="number" min="0" value={form.quantity} onChange={set("quantity")} /></div>
-          <div><label style={lbl}>Min Stock</label><input style={{ ...inp, width: "100%" }} type="number" min="0" value={form.min_stock} onChange={set("min_stock")} /></div>
-        </div>
-        <div><label style={lbl}>Supplier</label><input style={{ ...inp, width: "100%" }} value={form.supplier} onChange={set("supplier")} /></div>
-        <div><label style={lbl}>Notes</label><textarea style={{ ...inp, width: "100%", minHeight: 60, resize: "vertical" }} value={form.notes} onChange={set("notes")} /></div>
-      </div>
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
-        <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button onClick={save} disabled={saving}>{saving ? "Saving…" : item ? "Save Changes" : "Add Item"}</Button>
-      </div>
-    </Modal>
-  );
-}
-
-export default function InventoryPage({ showToast }) {
+export default function InventoryPage({ showToast, auditOnly = false }) {
   const { user } = useAuth();
   const canEdit = [ROLES.ADMIN, ROLES.SC].includes(user?.role);
   const [items, setItems] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({ search: "", category: "all", status: "" });
+  const [filters, setFilters] = useState({ q: "", category: "", status: "" });
   const [modal, setModal] = useState(null);
   const [auditItem, setAuditItem] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   const load = () => {
     setLoading(true);
-    Promise.all([
-      api.getItems({ search: filters.search, category: filters.category, status: filters.status }),
-      api.getStats(),
-    ]).then(([i, s]) => { setItems(i); setStats(s); }).finally(() => setLoading(false));
+    Promise.allSettled([api.getItems(), api.getStats()])
+      .then(([itemsRes, statsRes]) => {
+        if (itemsRes.status === "fulfilled") setItems(itemsRes.value || []);
+        if (statsRes.status === "fulfilled") setStats(statsRes.value || {});
+      })
+      .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [filters]);
+  useEffect(() => {
+    load();
+  }, []);
 
-  const openAudit = (item) => {
-    setAuditItem(item);
-    api.getAudit(item.id).then(setAuditLogs);
-  };
+  const filtered = useMemo(() => {
+    return items.filter((item) => {
+      const q = filters.q.toLowerCase();
+      const matchesQ = [
+        item.name,
+        item.category,
+        item.supplier,
+        item.unit,
+      ].some((value) =>
+        String(value || "")
+          .toLowerCase()
+          .includes(q),
+      );
+      const matchesCat = filters.category
+        ? item.category === filters.category
+        : true;
+      const matchesStatus = filters.status
+        ? getItemStatus(item) === filters.status
+        : true;
+      return matchesQ && matchesCat && matchesStatus;
+    });
+  }, [items, filters]);
+
+  const lowStockCount = items.filter(
+    (item) => getItemStatus(item) === "low",
+  ).length;
+  const criticalCount = items.filter(
+    (item) => getItemStatus(item) === "critical",
+  ).length;
+  const totalQuantity = items.reduce(
+    (sum, item) => sum + Number(item.quantity || 0),
+    0,
+  );
 
   const handleSave = async (data) => {
-    if (modal?.id) await api.updateItem(modal.id, data);
-    else await api.createItem(data);
-    showToast(modal?.id ? "Item updated." : "Item added.");
-    load();
+    try {
+      if (modal?.id) await api.updateItem(modal.id, data);
+      else await api.createItem(data);
+      showToast(
+        modal?.id ? "Inventory item updated." : "Inventory item created.",
+      );
+      setModal(null);
+      load();
+    } catch (e) {
+      showToast(e.message, "err");
+    }
   };
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Remove "${item.name}"?`)) return;
-    await api.deleteItem(item.id);
-    showToast("Item removed.", "warn");
+    if (!window.confirm(`Delete "${item.name}" from inventory?`)) return;
+    try {
+      await api.deleteItem(item.id);
+      showToast("Inventory item deleted.", "warn");
+      load();
+    } catch (e) {
+      showToast(e.message, "err");
+    }
+  };
+
+  const adjustQuantity = async (item, delta) => {
+    await api.adjustQuantity(
+      item.id,
+      delta,
+      delta > 0 ? "Manual increment" : "Manual decrement",
+    );
     load();
   };
 
-  const adj = async (item, delta) => {
-    await api.adjustQuantity(item.id, delta, delta > 0 ? "Manual increment" : "Manual decrement");
-    load();
+  const openAudit = async (item) => {
+    setAuditItem(item);
+    setAuditLoading(true);
+    try {
+      const logs = await api.getAudit(item?.id);
+      setAuditLogs(logs || []);
+    } catch (e) {
+      showToast(e.message, "err");
+    } finally {
+      setAuditLoading(false);
+    }
   };
 
-  const TABS = ["all", ...CATS];
+  const pageTitle = auditOnly ? "Inventory Audit Log" : "Inventory";
+  const pageSubtitle = auditOnly
+    ? "Review stock changes and item movement history."
+    : "Manage stock records, quantities, categories, and inventory health.";
 
   return (
     <div>
-      <PageHeader title="Inventory" subtitle="Central Store"
-        action={canEdit && <Button onClick={() => setModal({})}>+ Add Item</Button>}
+      <PageHeader
+        icon={auditOnly ? "solar:history-broken" : "solar:box-broken"}
+        title={pageTitle}
+        subtitle={pageSubtitle}
+        action={
+          !auditOnly && canEdit ? (
+            <Button icon="solar:add-square-broken" onClick={() => setModal({})}>
+              Add Item
+            </Button>
+          ) : null
+        }
       />
 
-      {stats && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
-          {[
-            { label: "Total", value: stats.total, color: "inherit" },
-            { label: "In Stock", value: stats.in_stock, color: "#3B6D11" },
-            { label: "Low Stock", value: stats.low_stock, color: "#854F0B" },
-            { label: "Critical", value: stats.critical, color: "#A32D2D" },
-          ].map((c) => (
-            <div key={c.label} style={{ background: "#f5f5f3", borderRadius: 8, padding: "12px 16px" }}>
-              <div style={{ fontSize: 12, color: "#888", marginBottom: 3 }}>{c.label}</div>
-              <div style={{ fontSize: 24, fontWeight: 500, color: c.color }}>{c.value}</div>
-            </div>
-          ))}
+      {!auditOnly && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
+          <StatCard
+            title="Inventory Items"
+            value={stats?.total_items ?? items.length}
+            icon="solar:box-broken"
+            tone="primary"
+          />
+          <StatCard
+            title="Total Quantity"
+            value={stats?.total_quantity ?? totalQuantity}
+            icon="solar:layers-minimalistic-broken"
+            tone="secondary"
+          />
+          <StatCard
+            title="Low Stock"
+            value={stats?.low_stock ?? lowStockCount}
+            icon="solar:danger-triangle-broken"
+            tone="warn"
+          />
+          <StatCard
+            title="Critical"
+            value={stats?.critical_stock ?? criticalCount}
+            icon="solar:close-circle-broken"
+            tone="danger"
+          />
         </div>
       )}
 
-      {/* Category tabs */}
-      <div style={{ display: "flex", borderBottom: "1px solid #eee", marginBottom: 14 }}>
-        {TABS.map((t) => (
-          <button key={t} onClick={() => setFilters((f) => ({ ...f, category: t }))}
-            style={{ padding: "7px 14px", fontSize: 13, border: "none", background: "transparent", cursor: "pointer",
-              borderBottom: filters.category === t ? "2px solid #1a1a1a" : "2px solid transparent",
-              color: filters.category === t ? "#1a1a1a" : "#888", fontWeight: filters.category === t ? 500 : 400, marginBottom: -1 }}>
-            {t === "all" ? "All" : t}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-        <input value={filters.search} placeholder="Search…" onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-          style={{ flex: 1, padding: "8px 10px", fontSize: 13, border: "1px solid #ddd", borderRadius: 6, outline: "none" }} />
-        <select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
-          style={{ padding: "8px 10px", fontSize: 13, border: "1px solid #ddd", borderRadius: 6, outline: "none" }}>
-          <option value="">All status</option>
-          <option value="ok">In stock</option>
-          <option value="low">Low stock</option>
-          <option value="critical">Critical</option>
-        </select>
-      </div>
-
-      {loading ? <Spinner /> : items.length === 0 ? <EmptyState /> : (
-        <div style={{ border: "1px solid #eee", borderRadius: 10, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, tableLayout: "fixed" }}>
-            <thead>
-              <tr style={{ background: "#fafafa" }}>
-                {["Item", "Category", "Quantity", "Min", "Status", "Updated", ""].map((h, i) => (
-                  <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 11, color: "#888",
-                    borderBottom: "1px solid #eee", textTransform: "uppercase", letterSpacing: "0.03em",
-                    width: ["26%","13%","15%","8%","11%","12%","15%"][i] }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const s = getItemStatus(item);
-                const sc = ITEM_STATUS_COLORS[s];
-                const cc = CAT_COLORS[item.category] || CAT_COLORS["Administrative"];
-                return (
-                  <tr key={item.id} style={{ background: "#fff" }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = "#fafafa"}
-                    onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5", fontWeight: 500 }}>
-                      {item.name}
-                      {item.supplier && <div style={{ fontSize: 11, color: "#aaa" }}>{item.supplier}</div>}
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5" }}>
-                      <Badge label={item.category} bg={cc.bg} color={cc.color} />
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5" }}>
-                      {canEdit ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <button onClick={() => adj(item, -1)}
-                            style={{ width: 22, height: 22, border: "1px solid #ddd", background: "transparent", borderRadius: 4, cursor: "pointer", fontSize: 13 }}>−</button>
-                          <span style={{ minWidth: 28, textAlign: "center" }}>{item.quantity}</span>
-                          <button onClick={() => adj(item, 1)}
-                            style={{ width: 22, height: 22, border: "1px solid #ddd", background: "transparent", borderRadius: 4, cursor: "pointer", fontSize: 13 }}>+</button>
-                          <span style={{ fontSize: 11, color: "#aaa" }}>{item.unit}</span>
-                        </div>
-                      ) : <span>{item.quantity} {item.unit}</span>}
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5", color: "#888" }}>{item.min_stock}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5" }}>
-                      <Badge label={ITEM_STATUS_LABELS[s]} bg={sc.bg} color={sc.color} />
-                    </td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5", color: "#aaa", fontSize: 12 }}>{item.updated_at || "—"}</td>
-                    <td style={{ padding: "10px 12px", borderBottom: "1px solid #f5f5f5" }}>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        {canEdit && <Button size="sm" variant="secondary" onClick={() => setModal(item)}>Edit</Button>}
-                        <Button size="sm" variant="secondary" onClick={() => openAudit(item)}>Log</Button>
-                        {canEdit && <Button size="sm" variant="danger" onClick={() => handleDelete(item)}>Del</Button>}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      <Card style={{ marginBottom: 18 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 220px 200px",
+            gap: 14,
+            alignItems: "end",
+          }}
+        >
+          <div>
+            <label style={labelStyle}>Search Inventory</label>
+            <div style={{ position: "relative" }}>
+              <Icon
+                icon="solar:magnifer-broken"
+                width="20"
+                height="20"
+                style={{
+                  position: "absolute",
+                  left: 14,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "var(--text-muted)",
+                }}
+              />
+              <input
+                value={filters.q}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, q: e.target.value }))
+                }
+                placeholder="Search by item, category, supplier..."
+                style={{ ...inputStyle, paddingLeft: 44 }}
+              />
+            </div>
+          </div>
+          <Select
+            label="Category"
+            value={filters.category}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, category: e.target.value }))
+            }
+          >
+            <option value="">All Categories</option>
+            {CATEGORY_OPTIONS.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Stock Status"
+            value={filters.status}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, status: e.target.value }))
+            }
+          >
+            <option value="">All Status</option>
+            <option value="ok">In Stock</option>
+            <option value="low">Low Stock</option>
+            <option value="critical">Critical</option>
+          </Select>
         </div>
+      </Card>
+
+      {loading ? (
+        <Spinner label="Loading inventory..." />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          message="No inventory items found"
+          sub="Try changing your filters or add a new inventory item."
+          action={
+            !auditOnly && canEdit ? (
+              <Button
+                icon="solar:add-square-broken"
+                onClick={() => setModal({})}
+              >
+                Add First Item
+              </Button>
+            ) : null
+          }
+        />
+      ) : (
+        <Table
+          headers={[
+            "Item",
+            "Category",
+            "Quantity",
+            "Min Stock",
+            "Status",
+            "Updated",
+            "Actions",
+          ]}
+          colWidths={["16%", "13%", "17%", "9%", "11%", "13%", "12%"]}
+        >
+          {/* FIXED: Changed from items.map to filtered.map */}
+          {filtered.map((item) => {
+            const s = getItemStatus(item);
+            const sc = ITEM_STATUS_COLORS[s];
+            const cc =
+              CAT_COLORS[item.category] || CAT_COLORS["Administrative"];
+            return (
+              <TableRow key={item.id}>
+                <TD style={{ fontWeight: 600 }}>
+                  {item.name}
+                  {item.supplier && (
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        color: "var(--text-muted)",
+                        fontWeight: 400,
+                        marginTop: 2,
+                      }}
+                    >
+                      {item.supplier}
+                    </div>
+                  )}
+                </TD>
+                <TD>
+                  <Badge label={item.category} bg={cc.bg} color={cc.color} />
+                </TD>
+                <TD>
+                  {canEdit ? (
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                      <button
+                        onClick={() => adjustQuantity(item, -1)}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          border: "1.5px solid var(--border)",
+                          background: "var(--surface-alt)",
+                          borderRadius: 5,
+                          cursor: "pointer",
+                          fontSize: 14,
+                          lineHeight: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--text-primary)",
+                          transition: "all 0.12s",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = "var(--border)")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background =
+                            "var(--surface-alt)")
+                        }
+                      >
+                        −
+                      </button>
+                      <span
+                        style={{
+                          minWidth: 32,
+                          textAlign: "center",
+                          fontWeight: 700,
+                          fontFamily: "var(--font-mono)",
+                        }}
+                      >
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => adjustQuantity(item, 1)}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          border: "1.5px solid var(--border)",
+                          background: "var(--surface-alt)",
+                          borderRadius: 5,
+                          cursor: "pointer",
+                          fontSize: 14,
+                          lineHeight: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--text-primary)",
+                          transition: "all 0.12s",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = "var(--border)")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background =
+                            "var(--surface-alt)")
+                        }
+                      >
+                        +
+                      </button>
+                      <span
+                        style={{ fontSize: 11.5, color: "var(--text-muted)" }}
+                      >
+                        {item.unit}
+                      </span>
+                    </div>
+                  ) : (
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {item.quantity}{" "}
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "var(--text-muted)",
+                          fontFamily: "var(--font-body)",
+                          fontWeight: 400,
+                        }}
+                      >
+                        {item.unit}
+                      </span>
+                    </span>
+                  )}
+                </TD>
+                <TD muted style={{ fontFamily: "var(--font-mono)" }}>
+                  {item.min_stock}
+                </TD>
+                <TD>
+                  <Badge
+                    label={ITEM_STATUS_LABELS[s]}
+                    bg={sc.bg}
+                    color={sc.color}
+                  />
+                </TD>
+                <TD muted style={{ fontSize: 12 }}>
+                  {item.updated_at
+                    ? new Date(item.updated_at).toLocaleDateString()
+                    : "—"}
+                </TD>
+                <TD>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setModal(item)}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => openAudit(item)}
+                    >
+                      Log
+                    </Button>
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleDelete(item)}
+                      >
+                        Del
+                      </Button>
+                    )}
+                  </div>
+                </TD>
+              </TableRow>
+            );
+          })}
+        </Table>
       )}
 
       {modal !== null && (
-        <ItemModal item={modal?.id ? modal : null} categories={CATS} onSave={handleSave} onClose={() => setModal(null)} />
+        <ItemModal
+          item={modal?.id ? modal : null}
+          onSave={handleSave}
+          onClose={() => setModal(null)}
+        />
       )}
-
       {auditItem && (
-        <Modal title={`Audit — ${auditItem.name}`} onClose={() => setAuditItem(null)}>
-          {auditLogs.length === 0 ? <EmptyState message="No audit records." /> : auditLogs.map((log) => (
-            <div key={log.id} style={{ padding: "9px 0", borderBottom: "1px solid #f5f5f5", display: "flex", gap: 10, fontSize: 13 }}>
-              <Badge label={log.action} bg="#f0f0f0" color="#444" />
-              <div style={{ flex: 1 }}>
-                <div>{log.note}</div>
-                {log.old_quantity != null && <div style={{ fontSize: 11, color: "#aaa" }}>Qty: {log.old_quantity} → {log.new_quantity}</div>}
-              </div>
-              <span style={{ fontSize: 11, color: "#aaa" }}>{log.created_at ? new Date(log.created_at).toLocaleString() : ""}</span>
-            </div>
-          ))}
-        </Modal>
+        <AuditModal
+          item={auditItem}
+          logs={auditLogs}
+          loading={auditLoading}
+          onClose={() => setAuditItem(null)}
+        />
       )}
     </div>
   );
+}
+
+function ItemModal({ item, onSave, onClose }) {
+  const [form, setForm] = useState({
+    name: "",
+    category: CATEGORY_OPTIONS[0],
+    quantity: 0,
+    min_stock: 10,
+    unit: "unit",
+    supplier: "",
+    notes: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (item) {
+      setForm({
+        name: item.name || "",
+        category: item.category || CATEGORY_OPTIONS[0],
+        quantity: item.quantity ?? 0,
+        min_stock: item.min_stock ?? 10,
+        unit: item.unit || "unit",
+        supplier: item.supplier || "",
+        notes: item.notes || "",
+      });
+    }
+  }, [item]);
+
+  const set = (field) => (e) =>
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const save = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    try {
+      await onSave({
+        ...form,
+        quantity: Number(form.quantity),
+        min_stock: Number(form.min_stock),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={item ? "Edit Inventory Item" : "Add Inventory Item"}
+      subtitle="Use clean inventory information for easy tracking."
+      onClose={onClose}
+      width={760}
+    >
+      <div style={{ display: "grid", gap: 16 }}>
+        <Input
+          label="Item Name"
+          value={form.name}
+          onChange={set("name")}
+          placeholder="e.g. Printer Paper"
+        />
+        <div
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
+        >
+          <Select
+            label="Category"
+            value={form.category}
+            onChange={set("category")}
+          >
+            {CATEGORY_OPTIONS.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </Select>
+          <Input
+            label="Unit"
+            value={form.unit}
+            onChange={set("unit")}
+            placeholder="unit, box, kg, litre"
+          />
+        </div>
+        <div
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}
+        >
+          <Input
+            label="Quantity"
+            type="number"
+            min="0"
+            value={form.quantity}
+            onChange={set("quantity")}
+          />
+          <Input
+            label="Minimum Stock"
+            type="number"
+            min="0"
+            value={form.min_stock}
+            onChange={set("min_stock")}
+          />
+        </div>
+        <Input
+          label="Supplier"
+          value={form.supplier}
+          onChange={set("supplier")}
+          placeholder="Supplier name"
+        />
+        <Textarea
+          label="Notes"
+          rows={3}
+          value={form.notes}
+          onChange={set("notes")}
+          placeholder="Optional notes"
+        />
+      </div>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 10,
+          marginTop: 22,
+        }}
+      >
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button icon="solar:diskette-broken" onClick={save} disabled={saving}>
+          {saving ? "Saving..." : item ? "Save Changes" : "Create Item"}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+function AuditModal({ item, logs, loading, onClose }) {
+  return (
+    <Modal
+      title={`Audit Log — ${item.name}`}
+      subtitle="Stock movement and item update history"
+      onClose={onClose}
+      width={860}
+    >
+      {loading ? (
+        <Spinner label="Loading audit log..." />
+      ) : logs.length === 0 ? (
+        <EmptyState
+          message="No audit records"
+          sub="No activity has been recorded for this item yet."
+          icon="solar:history-broken"
+        />
+      ) : (
+        <div style={{ display: "grid", gap: 12 }}>
+          {logs.map((log) => (
+            <Card
+              key={log.id || `${log.created_at}-${log.action}`}
+              style={{
+                boxShadow: "none",
+                background: "var(--color-primary-50)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 900 }}>
+                    {log.action || "Inventory Update"}
+                  </div>
+                  <div
+                    style={{
+                      color: "var(--text-muted)",
+                      marginTop: 5,
+                      fontSize: 13,
+                    }}
+                  >
+                    {log.note || log.remarks || "—"}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    textAlign: "right",
+                    color: "var(--text-muted)",
+                    fontSize: 12.5,
+                  }}
+                >
+                  <div>{formatDateTime(log.created_at)}</div>
+                  <div>
+                    {log.user?.full_name || log.user?.username || "System"}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+const labelStyle = {
+  display: "block",
+  marginBottom: 7,
+  fontSize: 11.5,
+  fontWeight: 800,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: "var(--text-secondary)",
+};
+
+const inputStyle = {
+  width: "100%",
+  height: 42,
+  border: "1.5px solid var(--color-primary-100)",
+  borderRadius: 4,
+  background: "#ffffff",
+  outline: "none",
+  padding: "0 13px",
+  fontSize: 13.5,
+  fontWeight: 650,
+};
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return value;
+  }
 }
