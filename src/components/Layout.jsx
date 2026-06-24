@@ -135,7 +135,7 @@ export default function Layout({ children, currentPage, setPage }) {
           </div>
         </div>
 
-        <nav style={{ display: "grid", gap: 6, flex: 1 }}>
+        <nav style={{ display: "grid", gap: 6 }}>
           {navItems.map((item) => {
             const active = item.key === currentPage;
             return (
@@ -178,6 +178,8 @@ export default function Layout({ children, currentPage, setPage }) {
             borderRadius: 8,
             background: "rgba(255, 255, 255, 0.06)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
+            position: "absolute",
+            bottom: 10
           }}
         >
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
@@ -254,12 +256,15 @@ export default function Layout({ children, currentPage, setPage }) {
                   justifyContent: "center",
                   gap: 8,
                   cursor: "pointer",
-                  fontWeight: 800,
+                  fontWeight: 800,    
+                  position: "relative",
                 }}
               >
                 <Icon icon="solar:bell-broken" width="20" height="20" />
                 {unread > 0 && (
-                  <span style={{ background: "var(--color-danger-500)", color: "#fff", borderRadius: 999, fontSize: 11, padding: "1px 7px" }}>
+                  <span style={{ background: "var(--color-danger-500)", color: "#fff", borderRadius: 999, fontSize: 11, padding: "1px 5px",  position: "absolute",
+                  top: 4,
+                  right: 5 }}>
                     {unread}
                   </span>
                 )}
