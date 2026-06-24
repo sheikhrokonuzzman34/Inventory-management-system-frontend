@@ -83,7 +83,7 @@ function GatePassDetail({ gp, showToast, onClose, onUpdated }) {
       <div style={{ display: "grid", gap: 20 }}>
         <Card style={{ boxShadow: "none", background: "var(--color-primary-50)" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 14 }}>
-            <Info label="Issue Order" value={`#${gp.issue_order?.id || "—"}`} />
+            <Info label="Issue Order" value={`#${gp.issue_order?.order_number || "—"}`} />
             <Info label="Demand" value={`#${demand?.id || "—"}`} />
             <Info label="Department" value={demand?.department || "—"} />
             <Info label="Status" value={withdrawn ? "Withdrawn" : "Ready"} />
